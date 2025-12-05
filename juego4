@@ -1,0 +1,292 @@
+import pygame
+import random
+import sys
+import os
+
+# Inicializar Pygame y el mezclador
+pygame.init()
+pygame.mixer.init()
+
+# ---------------- CONFIGURACIÓN ----------------
+ANCHO = 920
+ALTO = 560
+VENTANA = pygame.display.set_mode((ANCHO, ALTO))
+pygame.display.set_caption("Flappy Bird")
+
+BLANCO = (255, 255, 255)
+NEGRO = (0, 0, 0)
+ROJO = (230, 60, 60)
+VERDE = (60, 200, 120)
+AZUL = (70, 130, 230)
+
+FPS = 60
+clock = pygame.time.Clock()
+
+# ---------------- IMÁGENES (Asegúrate de que estos archivos existan) ----------------
+try:
+    AVE = pygame.image.load("ave_textura.png").convert_alpha()
+    AVE = pygame.transform.scale(AVE, (70, 100))
+
+    TUBERIA = pygame.image.load("tubo_textura.png").convert_alpha()
+    TUBERIA = pygame.transform.scale(TUBERIA, (80, 360))
+    TUBERIA_INV = pygame.transform.flip(TUBERIA, False, True)
+
+    FONDO = pygame.image.load("fondo_textura.png").convert()
+    FONDO = pygame.transform.scale(FONDO, (ANCHO, ALTO))
+except pygame.error as e:
+    # Manejo de error si las imágenes no cargan
+    print(f"Error al cargar recursos: {e}")
+    sys.exit()
+
+# ---------------- FONDO MOVIMIENTO ----------------
+fondo_x = 0
+vel_fondo = 1.5
+
+# ---------------- SONIDO ----------------
+try:
+    sonido_salto = pygame.mixer.Sound("diegopro.mp3")
+    sonido_salto.set_volume(0.8)
+except:
+    # Clase Dummy para evitar fallos si el archivo de sonido no existe
+    class DummySound:
+        def play(self): pass
+    sonido_salto = DummySound()
+
+# ---------------- FUENTES ----------------
+font_score = pygame.font.SysFont(None, 36)
+big_title = pygame.font.SysFont(None, 70)
+
+# ---------------- RÉCORD Y HISTORIAL ----------------
+SCORES_FILE = "scores.txt"
+RECORD_FILE = "record.txt"
+
+def cargar_record():
+    if os.path.exists(RECORD_FILE):
+        try:
+            with open(RECORD_FILE, "r") as f:
+                return int(f.read())
+        except ValueError:
+            return 0 # Retorna 0 si el archivo no contiene un número válido
+    return 0
+
+def guardar_record(val):
+    with open(RECORD_FILE, "w") as f:
+        f.write(str(val))
+
+def cargar_scores():
+    # Retorna lista de scores
+    if os.path.exists(SCORES_FILE):
+        with open(SCORES_FILE, "r") as f:
+            scores = [int(line.strip()) for line in f if line.strip().isdigit()]
+        return scores
+    return []
+
+def guardar_score(score):
+    scores = cargar_scores()
+    scores.append(score)
+    with open(SCORES_FILE, "w") as f:
+        for s in scores:
+            f.write(str(s) + "\n")
+
+# ---------------- CLASES ----------------
+class Bird:
+    def __init__(self):
+        self.x = 80
+        self.y = ALTO // 2
+        self.velocidad = 0
+        self.gravedad = 0.5
+        self.salto = -9
+        self.rect = AVE.get_rect(center=(self.x, self.y))
+
+    def update(self):
+        self.velocidad += self.gravedad
+        self.y += self.velocidad
+        self.rect.centery = self.y
+
+    def jump(self):
+        self.velocidad = self.salto
+
+    def draw(self):
+        VENTANA.blit(AVE, self.rect)
+
+class Pipe:
+    def __init__(self, x):
+        self.x = x
+        # Rango de altura ajustado para asegurar espacio para el tubo superior
+        self.altura = random.randint(150, ALTO - 150) 
+        self.gap = 240 # Brecha más pequeña para un juego más desafiante
+        self.rect_arriba = TUBERIA_INV.get_rect(midbottom=(self.x, self.altura - self.gap//2))
+        self.rect_abajo = TUBERIA.get_rect(midtop=(self.x, self.altura + self.gap//2))
+        self.passed = False
+
+    def update(self):
+        self.x -= 8
+        self.rect_arriba.centerx = self.x
+        self.rect_abajo.centerx = self.x
+
+    def draw(self):
+        VENTANA.blit(TUBERIA_INV, self.rect_arriba)
+        VENTANA.blit(TUBERIA, self.rect_abajo)
+
+# ---------------- BOTÓN ----------------
+def draw_button(text, x, y, w, h, color):
+    mouse = pygame.mouse.get_pos()
+    click = pygame.mouse.get_pressed()
+
+    # Ajuste de posición para centrar el botón en la pantalla
+    center_x = ANCHO // 2
+    x_offset = x - (w // 2)
+    
+    c = color
+    if x_offset < mouse[0] < x_offset+w and y < mouse[1] < y+h:
+        c = tuple(max(0, v - 30) for v in color)
+
+    pygame.draw.rect(VENTANA, c, (x_offset, y, w, h), border_radius=15)
+
+    label = font_score.render(text, True, BLANCO)
+    VENTANA.blit(label, (
+        x_offset + w//2 - label.get_width()//2,
+        y + h//2 - label.get_height()//2
+    ))
+
+    if click[0] and x_offset < mouse[0] < x_offset+w and y < mouse[1] < y+h:
+        pygame.time.delay(200)
+        return True
+    return False
+
+# ---------------- MAIN ----------------
+def main():
+    global fondo_x
+
+    bird = Bird()
+    # Se ajusta la posición inicial del primer tubo
+    pipes = [Pipe(ANCHO + 150)] 
+    score = 0
+    record = cargar_record()
+    estado = "inicio"
+
+    while True:
+        clock.tick(FPS)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+            if (estado == "jugando" or estado == "inicio") and event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    if estado == "inicio":
+                        # Iniciar juego con barra espaciadora
+                        bird = Bird()
+                        pipes = [Pipe(ANCHO + 150)]
+                        score = 0
+                        estado = "jugando"
+                    
+                    if estado == "jugando":
+                        bird.jump()
+                        sonido_salto.play()
+
+        # ---- DIBUJO DE FONDO HORIZONTAL ----
+        fondo_x -= vel_fondo
+        if fondo_x <= -ANCHO:
+            fondo_x = 0
+
+        VENTANA.blit(FONDO, (fondo_x, 0))
+        VENTANA.blit(FONDO, (fondo_x + ANCHO, 0))
+
+        # -------- INICIO --------
+        if estado == "inicio":
+            # Dibujar un pájaro estático en la pantalla de inicio
+            bird.draw() 
+
+            titulo = big_title.render("FLAPPY BIRD", True, AZUL)
+            msg_inicio = font_score.render("Presiona ESPACIO o JUGAR para empezar", True, NEGRO)
+            
+            VENTANA.blit(titulo, (ANCHO//2 - titulo.get_width()//2, 100))
+            VENTANA.blit(msg_inicio, (ANCHO//2 - msg_inicio.get_width()//2, 180))
+            
+            # Botones centrados
+            if draw_button("JUGAR", ANCHO//2, 340, 200, 60, VERDE):
+                bird = Bird()
+                pipes = [Pipe(ANCHO + 150)]
+                score = 0
+                estado = "jugando"
+
+        # -------- JUGANDO --------
+        elif estado == "jugando":
+            bird.update()
+
+            # Lógica de tuberías
+            for pipe in pipes:
+                pipe.update()
+
+            # Generar nueva tubería
+            if pipes[-1].x < ANCHO - 250:
+                pipes.append(Pipe(ANCHO + 100))
+
+            # Revisión de Colisiones y Puntuación
+            for pipe in pipes:
+                # Colisión con tuberías
+                if bird.rect.colliderect(pipe.rect_arriba) or bird.rect.colliderect(pipe.rect_abajo):
+                    guardar_score(score) # Guardar el score antes de morir
+                    if score > record:
+                        record = score
+                        guardar_record(record)
+                    estado = "muerto"
+
+                # Puntuación
+                if not pipe.passed and pipe.x < bird.x:
+                    score += 1
+                    pipe.passed = True
+            
+            # Eliminar tuberías que salieron de la pantalla
+            pipes = [p for p in pipes if p.x > -100]
+
+            # Colisión con el suelo o techo
+            if bird.y < 0 or bird.y > ALTO:
+                guardar_score(score) # Guardar el score antes de morir
+                if score > record:
+                    record = score
+                    guardar_record(record)
+                estado = "muerto"
+
+            # Dibujar elementos
+            for pipe in pipes:
+                pipe.draw()
+            bird.draw()
+
+            # Mostrar Puntuación
+            VENTANA.blit(font_score.render(f"Score: {score}", True, NEGRO), (10, 10))
+            VENTANA.blit(font_score.render(f"Record: {record}", True, NEGRO), (10, 40))
+
+        # -------- GAME OVER --------
+        elif estado == "muerto":
+            # Dibujar elementos estáticos (bird y pipes)
+            for pipe in pipes:
+                pipe.draw()
+            bird.draw()
+
+            msg = big_title.render("GAME OVER", True, ROJO)
+            score_msg = font_score.render(f"Puntuación: {score}", True, NEGRO)
+            record_msg = font_score.render(f"Record: {record}", True, NEGRO)
+            
+            VENTANA.blit(msg, (ANCHO//2 - msg.get_width()//2, 120))
+            VENTANA.blit(score_msg, (ANCHO//2 - score_msg.get_width()//2, 190))
+            VENTANA.blit(record_msg, (ANCHO//2 - record_msg.get_width()//2, 230))
+
+            # Botones centrados
+            if draw_button("Reintentar", ANCHO//2, 320, 240, 60, VERDE):
+                bird = Bird()
+                pipes = [Pipe(ANCHO + 150)]
+                score = 0
+                estado = "jugando"
+
+            if draw_button("Inicio", ANCHO//2, 400, 240, 60, AZUL):
+                # CORRECCIÓN: Se cambia el estado a "inicio"
+                import Interfaz
+
+        pygame.display.update()
+
+# ---------------- RUN (CORREGIDO) ----------------
+if __name__ == "__main__":
+    main()
