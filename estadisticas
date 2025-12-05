@@ -1,0 +1,69 @@
+import os
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# -------- ARCHIVO DE PUNTUACIONES --------
+SCORES_FILE = "scores.txt"
+
+if not os.path.exists(SCORES_FILE):
+    print(f"No existe el archivo {SCORES_FILE}")
+    raise SystemExit(1)
+
+# -------- CARGAR Y LIMPIAR DATOS --------
+try:
+    with open(SCORES_FILE, "r") as f:
+        lines = f.readlines()
+    # Convertir líneas a enteros, ignorando vacías o inválidas
+    scores = [int(line.strip()) for line in lines if line.strip().isdigit()]
+except Exception as e:
+    print("Error leyendo el archivo:", e)
+    raise SystemExit(1)
+
+if not scores:
+    print("No hay datos válidos para analizar")
+    raise SystemExit(0)
+
+df = pd.DataFrame({"score": scores})
+
+# -------- ESTADÍSTICAS --------
+print("===== ESTADÍSTICAS DEL JUEGO =====")
+print(f"Partidas jugadas: {len(df)}")
+print(f"Score máximo: {df['score'].max()}")
+print(f"Score mínimo: {df['score'].min()}")
+print(f"Promedio: {df['score'].mean():.2f}")
+print(f"Mediana: {df['score'].median()}")
+
+# -------- FRECUENCIA POR SCORE --------
+frecuencia = df["score"].value_counts().sort_index()
+max_score = df["score"].max()
+# Completar todos los scores aunque no hayan sido alcanzados
+frecuencia = frecuencia.reindex(range(0, max_score + 1), fill_value=0)
+
+# -------- GRÁFICA --------
+plt.figure(figsize=(12, 6))
+bars = plt.bar(frecuencia.index, frecuencia.values, color="#2E86C1")
+
+plt.xlabel("Puntaje")
+plt.ylabel("Veces que se obtuvo")
+plt.title("Frecuencia de puntajes en Flappy Bird")
+
+# Ajuste de xticks para visibilidad
+num_ticks = 20
+step = max(1, max_score // num_ticks)
+plt.xticks(range(0, max_score + 1, step), rotation=45)
+
+# Mostrar número de veces sobre cada barra (opcional)
+for bar in bars:
+    height = bar.get_height()
+    if height > 0:
+        plt.text(bar.get_x() + bar.get_width()/2, height + 0.1, str(int(height)),
+                 ha='center', va='bottom', fontsize=9)
+
+plt.grid(axis="y", linestyle="--", alpha=0.5)
+plt.tight_layout()
+
+# -------- GUARDAR Y MOSTRAR --------
+out_file = "grafica_scores.png"
+plt.savefig(out_file)
+print(f"Gráfica guardada como: {out_file}")
+plt.show()
