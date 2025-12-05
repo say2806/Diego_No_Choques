@@ -1,0 +1,103 @@
+import pygame
+import sys
+import random
+
+# ================= CONFIG =================
+pygame.init()
+WIDTH, HEIGHT = 920, 560
+SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Diego ¡NO CHOQUES!")
+CLOCK = pygame.time.Clock()
+FPS = 60
+
+WHITE = (255,255,255)
+BLACK = (0,0,0)
+GRAY = (60,60,60)
+YELLOW = (255,220,0)
+RED = (200,40,40)
+BLUE = (40,120,220)
+MENU = "menu"
+state = MENU
+
+font = pygame.font.SysFont("arial", 18, bold=True)
+title_font = pygame.font.SysFont("arial", 42, bold=True)
+
+# ================= FONDO CARRETERA =================
+def draw_road():
+    SCREEN.fill(GRAY)
+    pygame.draw.rect(SCREEN, (80,80,80), (0, 120, WIDTH, 320))
+    for i in range(12):
+        pygame.draw.rect(SCREEN, YELLOW, (WIDTH//2 - 5, 140 + i * 35, 10, 20))
+
+# ================= BOTÓN =================
+def draw_button(x, y, w, h, text):
+    rect = pygame.Rect(x, y, w, h)
+    color = (230,230,230) if rect.collidepoint(mouse_pos) else (180,180,180)
+    pygame.draw.rect(SCREEN, color, rect, border_radius=10)
+    pygame.draw.rect(SCREEN, BLACK, rect, 2, border_radius=10)
+    label = font.render(text, True, BLACK)
+    SCREEN.blit(label, (rect.centerx-label.get_width()//2,
+                        rect.centery-label.get_height()//2))
+    return rect
+
+# ================= AUTOS ANIMADOS =================
+class Car:
+    def __init__(self, x, y, speed, color):
+        self.x = x
+        self.y = y
+        self.speed = speed
+        self.color = color
+    def update(self):
+        self.y += self.speed
+        if self.y > HEIGHT:
+            self.y = -80
+            self.x = random.randint(300, 560)
+    def draw(self):
+        pygame.draw.rect(SCREEN, self.color, (self.x, self.y, 40, 70))
+        pygame.draw.rect(SCREEN, BLACK, (self.x+5, self.y+10, 30, 10))
+        pygame.draw.circle(SCREEN, BLACK, (self.x+8, self.y+65), 6)
+        pygame.draw.circle(SCREEN, BLACK, (self.x+32, self.y+65), 6)
+
+cars = [
+    Car(330, -100, 4, RED),
+    Car(450, -300, 5, BLUE),
+    Car(560, -600, 3, (255,140,0))
+]
+
+# ================= LOOP PRINCIPAL =================
+running = True
+while running:
+    CLOCK.tick(FPS)
+    mouse_pos = pygame.mouse.get_pos()
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
+
+        if event.type == pygame.MOUSEBUTTONDOWN and state == MENU:
+            if btn_play.collidepoint(mouse_pos):
+                import juego4  # solo se importa si se clickea
+                juego4.main()  # llama al juego
+            if btn_stats.collidepoint(mouse_pos):
+                import estadisticas  # solo se importa si se clickea
+                estadisticas.main()  # llama a las estadísticas
+            if btn_exit.collidepoint(mouse_pos):
+                pygame.quit()
+                sys.exit()
+
+    # ================= DIBUJO =================
+    draw_road()
+    for c in cars:
+        c.update()
+        c.draw()
+
+    if state == MENU:
+        title = title_font.render("¡DIEGO, NO CHOQUES!", True, WHITE)
+        SCREEN.blit(title, (WIDTH//2-title.get_width()//2, 30))
+
+        btn_play  = draw_button(WIDTH//2-70, 220, 140, 45, "JUGAR")
+        btn_stats = draw_button(WIDTH//2-70, 290, 140, 45, "ESTADÍSTICAS")
+        btn_exit  = draw_button(WIDTH//2-70, 360, 140, 45, "SALIR")
+
+    pygame.display.flip()
